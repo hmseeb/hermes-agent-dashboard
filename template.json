@@ -20,8 +20,8 @@
       "builder": "DOCKERFILE",
       "startCommand": null,
       "startCommandNote": "Deliberately unset. Railway execs a start command raw and discards the image ENTRYPOINT, which would bypass entrypoint-dispatch.sh -> /init and kill the whole s6 supervision tree (no dashboard, no cont-init bootstrap, no UID remap). The Dockerfile's CMD carries the gateway invocation instead.",
-      "healthcheckPath": "/",
-      "healthcheckNote": "Unauthenticated requests get a 302 to /login, which Railway counts as healthy, so no unauthenticated health route has to be exposed. Boot to first response measured at roughly 60s locally, inside the published-template 300s healthcheck ceiling.",
+      "healthcheckPath": "/login",
+      "healthcheckNote": "NOT /. Verified live: Railway's prober counts a 302 as a failed attempt ('Attempt #9 failed with HTTP 302') and burns the whole window while the app is up and serving, exactly the force-SSL-redirect trap in a different disguise. / redirects anonymous callers to /login, so the healthcheck points at /login, which renders a 200 login page without credentials. Boot to first response is roughly 60s, inside the published-template 300s ceiling.",
       "port": 8080,
       "volume": {
         "mountPath": "/opt/data",

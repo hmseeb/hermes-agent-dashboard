@@ -38,6 +38,11 @@ done
 curl -s -D- -o /dev/null http://127.0.0.1:18080/ | grep -qi 'location: /login' \
   || fail "anonymous request did not redirect to the login page"
 
+# The Railway healthcheck path must answer 200 WITHOUT credentials. Railway's
+# prober counts a 302 as a failed attempt, so / cannot be the healthcheck.
+code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/login)
+[ "$code" = "200" ] || fail "healthcheck path /login returned $code, expected 200"
+
 code=$(curl -s -o /dev/null -w '%{http_code}' -c /tmp/hermes-cookies.txt \
   -X POST http://127.0.0.1:18080/auth/password-login \
   -H 'content-type: application/json' \
