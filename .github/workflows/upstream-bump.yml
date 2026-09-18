@@ -1,0 +1,64 @@
+name: Bump Hermes image pin
+
+# Watches Docker Hub for a newer nousresearch/hermes-agent release tag and opens
+# a PR bumping the Dockerfile pin. It never pushes to main: a Hermes release can
+# change config schema or dependency floors, and deployers redeploy from this
+# repo, so the bump stays a reviewed change.
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Find newest release tag
+        id: latest
+        run: |
+          set -euo pipefail
+          # Release tags only: vYYYY.M.D with an optional .PATCH. Skips latest/main,
+          # which are mutable and are exactly what the pin exists to avoid.
+          latest=$(curl -fsSL "https://hub.docker.com/v2/repositories/nousresearch/hermes-agent/tags?page_size=100&ordering=last_updated" \
+            | python3 -c "
+          import json,re,sys
+          tags=[t['name'] for t in json.load(sys.stdin)['results']]
+          rel=[t for t in tags if re.fullmatch(r'v\d{4}\.\d{1,2}\.\d{1,2}(\.\d+)?', t)]
+          key=lambda t: [int(x) for x in t[1:].split('.')]
+          print(max(rel, key=key) if rel else '')")
+          current=$(grep -oE 'ARG HERMES_IMAGE_VERSION=\S+' Dockerfile | cut -d= -f2)
+          echo "latest=$latest"   >> "$GITHUB_OUTPUT"
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          echo "Current $current, newest published $latest"
+
+      - name: Open bump PR
+        if: steps.latest.outputs.latest != '' && steps.latest.outputs.latest != steps.latest.outputs.current
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LATEST: ${{ steps.latest.outputs.latest }}
+          CURRENT: ${{ steps.latest.outputs.current }}
+        run: |
+          set -euo pipefail
+          branch="bump/hermes-$LATEST"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          sed -i "s|ARG HERMES_IMAGE_VERSION=.*|ARG HERMES_IMAGE_VERSION=$LATEST|" Dockerfile
+          git commit -qam "Bump Hermes image pin to $LATEST"
+          git push -q origin "$branch"
+          gh pr create --title "Bump Hermes image pin to $LATEST" --body "\
+          Upstream published \`$LATEST\` (was \`$CURRENT\`).
+
+          Before merging, run \`bash test/contract.sh\` against a local build of this
+          branch. It catches the failures a release can introduce: the dashboard not
+          answering, the auth gate changing shape, the listener going IPv6-only, the
+          gateway dying on a stale lock.
+
+          Deployers redeploy from this repo, so a merge reaches other people's agents." \
+            --base main --head "$branch"
