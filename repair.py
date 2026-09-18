@@ -37,9 +37,13 @@ VARIABLES = {
         "isOptional": False, "defaultValue": "8080",
         "description": "Port the dashboard listens on. Matches the service domain target port.",
     },
+    # Username and password are the only two required fields on the deploy form:
+    # they are the credentials the deployer needs in hand the moment the service
+    # comes up, and no default can supply them safely. Everything else either has
+    # a working default or can be added from the dashboard after boot.
     "HERMES_DASHBOARD_BASIC_AUTH_USERNAME": {
-        "isOptional": False, "defaultValue": "admin",
-        "description": "Username for the dashboard login page.",
+        "isOptional": False,
+        "description": "Choose the username for the dashboard login page.",
     },
     # Deliberately no defaultValue: this becomes a required field on the deploy
     # form, so the deployer picks the password and knows it before the service
@@ -58,8 +62,8 @@ VARIABLES = {
         "description": "Public origin Hermes builds OAuth redirect URIs from.",
     },
     "OPENROUTER_API_KEY": {
-        "isOptional": False,
-        "description": "Inference provider key. Get a free one at openrouter.ai/keys. To use a different provider, clear this and add that provider's key variable instead.",
+        "isOptional": True,
+        "description": "Optional. Inference provider key, free from openrouter.ai/keys. You can also add this, or any other provider, from the dashboard's Keys tab after deploying.",
     },
     "TELEGRAM_BOT_TOKEN": {
         "isOptional": True,
