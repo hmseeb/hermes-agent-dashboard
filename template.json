@@ -1,0 +1,53 @@
+{
+  "name": "Hermes Agent (w/ Dashboard)",
+  "description": "Hermes AI agent for Telegram, Discord and Slack, with a password-locked web dashboard",
+  "workspaceId": "fc4796db-2c6c-4354-a564-d4a1d900af53",
+  "upstream": {
+    "repository": "https://github.com/NousResearch/hermes-agent",
+    "version": "v2026.9.14",
+    "image": "nousresearch/hermes-agent:v2026.9.14",
+    "$note": "Upstream publishes an official image on Docker Hub (revision 345cd2b = tag v2026.9.14), so nothing is built from source. The incumbent 2691-deploy template clones the repo and compiles the React dashboard at build time, which is a multi-minute build with a documented trail of pyproject pin traps (nemo-relay floors, uv exclude-newer, editable-install-only). None of that applies here."
+  },
+  "positioning": {
+    "$note": "Marketplace is SATURATED for 'hermes': hermes-railway-template 4813 deploys (thin worker, no web UI), hermes-agent-ai 2691 (fat custom Starlette admin over a source build), hermes-agent-nous-research 1065, hermes 201. The gap is the intersection: the official image's own supervised dashboard, exposed and authed, with no custom server code. Name follows the one latecomer pattern that beats incumbents (N8N (w/ workers)): app name first, one capability qualifier in parentheses."
+  },
+  "topology": {
+    "$note": "Single service, single volume. The official image is s6-overlay based: /init is PID 1, the container CMD runs as the main program (dies -> container dies -> Railway restarts), and the dashboard runs beside it as a supervised s6 longrun that s6 restarts on crash. That is upstream's own supervision, not ours. No Postgres: hermes keeps state in SQLite under HERMES_HOME."
+  },
+  "services": {
+    "hermes": {
+      "source": "github.com/hmseeb/hermes-agent-dashboard",
+      "builder": "DOCKERFILE",
+      "startCommand": null,
+      "startCommandNote": "Deliberately unset. Railway execs a start command raw and discards the image ENTRYPOINT, which would bypass entrypoint-dispatch.sh -> /init and kill the whole s6 supervision tree (no dashboard, no cont-init bootstrap, no UID remap). The Dockerfile's CMD carries the gateway invocation instead.",
+      "healthcheckPath": "/",
+      "healthcheckNote": "Unauthenticated requests get a 302 to /login, which Railway counts as healthy, so no unauthenticated health route has to be exposed. Boot to first response measured at roughly 60s locally, inside the published-template 300s healthcheck ceiling.",
+      "port": 8080,
+      "volume": {
+        "mountPath": "/opt/data",
+        "$note": "The image's own HERMES_HOME / VOLUME / HERMES_WRITE_SAFE_ROOT are all /opt/data, so mounting there needs zero env overrides and inherits stage2-hook.sh's boot-time chown of HERMES_HOME plus its top-level state-file ownership sweep. Relocating to /data (as the 4813-deploy template does) costs four env overrides and a hand-written chown -R hook. Holds config.yaml, .env, sessions, state.db, memories, skills, pairing."
+      },
+      "variables": {
+        "HERMES_DASHBOARD": "true",
+        "HERMES_DASHBOARD_note": "Baked into the Dockerfile too; the s6 dashboard service exits 0 and marks itself permanently down unless this is truthy.",
+        "HERMES_DASHBOARD_HOST": "::",
+        "HERMES_DASHBOARD_PORT": "8080",
+        "HERMES_DASHBOARD_BASIC_AUTH_USERNAME": "admin",
+        "HERMES_DASHBOARD_BASIC_AUTH_PASSWORD": "${{secret(32)}}",
+        "HERMES_DASHBOARD_BASIC_AUTH_PASSWORD_note": "Required, not optional: the dashboard's auth gate fails start_server closed on a non-loopback bind with no auth provider, so a deployer who clears this gets no dashboard at all rather than an open one. secret(32) survives templateGenerate because it is a generator reference. Despite the name this is not HTTP Basic: anonymous requests 302 to /login and credentials post to /auth/password-login, which sets hermes_session_* cookies.",
+        "HERMES_DASHBOARD_BASIC_AUTH_SECRET": "${{secret(64)}}",
+        "HERMES_DASHBOARD_BASIC_AUTH_SECRET_note": "Signing key for those session cookies. Unset, hermes mints a random key per process, so every dashboard restart silently logs everyone out. Pinning it to a per-deployment generated secret keeps sessions alive across restarts and redeploys.",
+        "HERMES_DASHBOARD_PUBLIC_URL": "https://${{RAILWAY_PUBLIC_DOMAIN}}",
+        "HERMES_DASHBOARD_PUBLIC_URL_note": "Feeds should_require_dashboard_auth() and the MCP OAuth redirect_uri. Safe here because it always arrives alongside the basic-auth pair.",
+        "OPENROUTER_API_KEY": "prompted, one provider key required",
+        "TELEGRAM_BOT_TOKEN": "prompted, optional",
+        "TELEGRAM_ALLOWED_USERS": "prompted, optional, comma separated numeric ids"
+      },
+      "credentialsNote": "No .env file is written at boot. hermes_cli/env_loader.py loads $HERMES_HOME/.env over os.environ but its startup scrub list (_PROFILE_MANAGED_ENV_KEYS) covers only ACP/Copilot routing keys and explicitly excludes credentials, so plain Railway variables reach the gateway unmodified."
+    }
+  },
+  "verification": {
+    "journey": "Deploy -> open domain -> browser basic-auth prompt -> log in as admin -> Hermes dashboard loads (Chat, Keys, Skills) -> message the Telegram bot -> approve the pairing request -> agent replies",
+    "contractTests": "test/contract.sh: 401 anonymous, 200 authenticated, 401 on wrong password, v4-mapped connect to the v6 listener, gateway process alive, stale gateway.pid cleared across a container restart"
+  }
+}
