@@ -1,0 +1,21 @@
+#!/bin/sh
+# Sidecars on legacy volumes (self-hosted webui + cloudflared tunnel, voice
+# bridge, profile gateways) are normally revived by hermes cron watchdogs on a
+# 60-minute interval. Run the same scripts once shortly after boot so they come
+# back in under a minute instead of up to an hour. They are the volume's own
+# idempotent watchdogs (check pid/health, start if down), run as hermes, in the
+# background so boot never blocks on them. Missing scripts are skipped.
+HERMES_HOME="${HERMES_HOME:-/data/.hermes}"
+log="$HERMES_HOME/logs/legacy-kick.log"
+(
+  sleep 45
+  mkdir -p "$HERMES_HOME/logs"
+  for s in ensure-nix-webui-tunnel.sh nix-voice-bridge-watchdog.py discord-profile-watchdog.py; do
+    f="$HERMES_HOME/scripts/$s"
+    [ -f "$f" ] || continue
+    case "$s" in *.py) interp=python3 ;; *) interp=bash ;; esac
+    echo "[legacy-kick] $(date -u +%FT%TZ) $s" >> "$log"
+    s6-setuidgid hermes sh -c "cd \"$HERMES_HOME\" && HOME=/data PATH=/opt/hermes/bin:/opt/hermes/.venv/bin:/data/.local/bin:\$PATH $interp \"$f\"" >> "$log" 2>&1 || echo "[legacy-kick] $s exited $?" >> "$log"
+  done
+) &
+echo "[legacy-kick] scheduled watchdog kick in 45s (log: $log)"

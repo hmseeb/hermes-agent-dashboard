@@ -1,0 +1,8 @@
+#!/bin/sh
+# Anything on the legacy volume not owned by hermes gets fixed before services
+# start. After the one-off pre-migration `chown -R 10000:10000 /data` this is a
+# fast no-op scan; on a cold volume it is the whole migration.
+# ponytail: full-volume find every boot (~30-60s on 15 GB). Drop once all files are hermes-owned.
+start=$(date +%s)
+find /data \( ! -user hermes -o ! -group hermes \) -exec chown -h hermes:hermes {} + 2>/dev/null || true
+echo "[legacy-chown] /data ownership reconciled in $(( $(date +%s) - start ))s"
