@@ -1,25 +1,43 @@
 #!/bin/sh
 # Sidecars on legacy volumes (self-hosted webui + cloudflared tunnel, voice
-# bridge, profile gateways) are normally revived by hermes cron watchdogs on a
-# 60-minute interval. Run the same scripts once shortly after boot so they come
-# back in under a minute instead of up to an hour. They are the volume's own
-# idempotent watchdogs (check pid/health, start if down), run as hermes, in the
-# background so boot never blocks on them. Missing scripts are skipped.
+# bridges, profile gateways, proxies) are normally revived by hermes cron
+# watchdogs on a 5-60 minute interval. Run those same scripts once shortly after
+# boot so they come back in about a minute instead of waiting for cron.
+#
+# Which scripts: every enabled script-only (no_agent) job in $HERMES_HOME/cron/
+# jobs.json whose script name looks like a watchdog (ensure|watchdog|tunnel|
+# mux|proxy). They are the volume's own idempotent watchdogs (check pid/health,
+# start if down), run as hermes, in the background so boot never blocks on them.
+#
+# Verified live: the first pass usually runs while the webui is still cold
+# starting (~2 min), so each script is retried every 30s until it exits 0.
 HERMES_HOME="${HERMES_HOME:-/data/.hermes}"
 log="$HERMES_HOME/logs/legacy-kick.log"
+jobs="$HERMES_HOME/cron/jobs.json"
+
 run_as_hermes() {
   case "$1" in *.py) interp=python3 ;; *) interp=bash ;; esac
   s6-setuidgid hermes sh -c "cd \"$HERMES_HOME\" && HOME=/data PATH=/opt/hermes/bin:/opt/hermes/.venv/bin:/data/.local/bin:\$PATH $interp \"$1\""
 }
+
+[ -f "$jobs" ] || { echo "[legacy-kick] no $jobs; nothing to kick"; exit 0; }
+scripts=$(/opt/hermes/.venv/bin/python - "$jobs" <<'PY'
+import json, re, sys
+d = json.load(open(sys.argv[1])); jobs = d.get("jobs", d) if isinstance(d, dict) else d
+for j in jobs:
+    s = j.get("script") or ""
+    if j.get("no_agent") and j.get("enabled", True) and re.search(r"ensure|watchdog|tunnel|mux|proxy", s):
+        print(s)
+PY
+)
+[ -n "$scripts" ] || { echo "[legacy-kick] no watchdog-style script jobs in cron; nothing to kick"; exit 0; }
+echo "[legacy-kick] will kick in 45s: $(echo $scripts | tr '\n' ' ') (log: $log)"
 (
   sleep 45
   mkdir -p "$HERMES_HOME/logs"
-  # Verified live: the first pass starts the webui but its cold start (~2 min)
-  # outlasts the tunnel watchdog's health check, so cloudflared never launches
-  # until the hourly cron. Retry each script until it exits 0, up to ~10 min.
-  for s in ensure-nix-webui-tunnel.sh nix-voice-bridge-watchdog.py discord-profile-watchdog.py; do
+  for s in $scripts; do
     f="$HERMES_HOME/scripts/$s"
-    [ -f "$f" ] || continue
+    [ -f "$f" ] || { echo "[legacy-kick] missing $f" >> "$log"; continue; }
     n=0
     while :; do
       n=$((n+1))
@@ -31,4 +49,3 @@ run_as_hermes() {
     done
   done
 ) &
-echo "[legacy-kick] scheduled watchdog kick in 45s (log: $log)"
