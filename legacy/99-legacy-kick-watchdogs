@@ -7,15 +7,28 @@
 # background so boot never blocks on them. Missing scripts are skipped.
 HERMES_HOME="${HERMES_HOME:-/data/.hermes}"
 log="$HERMES_HOME/logs/legacy-kick.log"
+run_as_hermes() {
+  case "$1" in *.py) interp=python3 ;; *) interp=bash ;; esac
+  s6-setuidgid hermes sh -c "cd \"$HERMES_HOME\" && HOME=/data PATH=/opt/hermes/bin:/opt/hermes/.venv/bin:/data/.local/bin:\$PATH $interp \"$1\""
+}
 (
   sleep 45
   mkdir -p "$HERMES_HOME/logs"
+  # Verified live: the first pass starts the webui but its cold start (~2 min)
+  # outlasts the tunnel watchdog's health check, so cloudflared never launches
+  # until the hourly cron. Retry each script until it exits 0, up to ~10 min.
   for s in ensure-nix-webui-tunnel.sh nix-voice-bridge-watchdog.py discord-profile-watchdog.py; do
     f="$HERMES_HOME/scripts/$s"
     [ -f "$f" ] || continue
-    case "$s" in *.py) interp=python3 ;; *) interp=bash ;; esac
-    echo "[legacy-kick] $(date -u +%FT%TZ) $s" >> "$log"
-    s6-setuidgid hermes sh -c "cd \"$HERMES_HOME\" && HOME=/data PATH=/opt/hermes/bin:/opt/hermes/.venv/bin:/data/.local/bin:\$PATH $interp \"$f\"" >> "$log" 2>&1 || echo "[legacy-kick] $s exited $?" >> "$log"
+    n=0
+    while :; do
+      n=$((n+1))
+      echo "[legacy-kick] $(date -u +%FT%TZ) $s (attempt $n)" >> "$log"
+      run_as_hermes "$f" >> "$log" 2>&1 && break
+      echo "[legacy-kick] $s exited non-zero" >> "$log"
+      [ "$n" -ge 20 ] && break
+      sleep 30
+    done
   done
 ) &
 echo "[legacy-kick] scheduled watchdog kick in 45s (log: $log)"
