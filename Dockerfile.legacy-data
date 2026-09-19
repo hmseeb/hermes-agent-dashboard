@@ -1,0 +1,47 @@
+# Same image as ./Dockerfile, for services MIGRATED from the praveen / lovexbytes
+# era templates: their volume mounts at /data, HOME was /data, HERMES_HOME was
+# /data/.hermes, and everything on it is root-owned. Select on the service with
+# RAILWAY_DOCKERFILE_PATH=Dockerfile.legacy-data. Fresh deploys use ./Dockerfile.
+ARG HERMES_IMAGE_VERSION=v2026.9.14
+FROM nousresearch/hermes-agent:${HERMES_IMAGE_VERSION}
+
+# 9119 (upstream's default), not 8080: the old template ran its dashboard on
+# 127.0.0.1:9119 and scripts on those volumes talk to it there. PORT=9119 on the
+# service points the public edge at it.
+ENV HERMES_DASHBOARD=true \
+    HERMES_DASHBOARD_HOST=:: \
+    HERMES_DASHBOARD_PORT=9119
+
+# IPV6_V6ONLY coercion, identical to ./Dockerfile (see the comment there).
+RUN set -eu; sc="$(/opt/hermes/.venv/bin/python -c 'import sitecustomize;print(sitecustomize.__file__)' 2>/dev/null || /opt/hermes/.venv/bin/python -c 'import site;print(site.getsitepackages()[0]+"/sitecustomize.py")')"; printf '%s\n' \
+    'import socket' \
+    '_orig = socket.socket.setsockopt' \
+    'def setsockopt(self, level, optname, value, *a):' \
+    '    if level == socket.IPPROTO_IPV6 and optname == socket.IPV6_V6ONLY:' \
+    '        value = 0' \
+    '    return _orig(self, level, optname, value, *a)' \
+    'socket.socket.setsockopt = setsockopt' \
+    >> "$sc"; /opt/hermes/.venv/bin/python -c 'import socket,sys; sys.exit(0 if socket.socket.setsockopt.__class__.__name__ == "function" else 1)'
+
+# docker/main-wrapper.sh hardcodes HOME=/opt/data (HERMES_HOME is overridable,
+# HOME is not). Symlinking /opt/data onto the legacy mount keeps HOME-relative
+# state (.npm, .config/gws, .cache, .local, projects/) resolving, and keeps every
+# hardcoded /data/... path in the volume's scripts, cron jobs and skills valid.
+RUN rm -rf /opt/data && mkdir -p /data && ln -s /data /opt/data
+ENV HERMES_HOME=/data/.hermes \
+    HERMES_WRITE_SAFE_ROOT=/data \
+    HERMES_LAZY_INSTALL_TARGET=/data/.hermes/lazy-packages
+
+# Interpreter paths the old image had and scripts on those volumes hardcode.
+RUN ln -sf /opt/hermes/.venv/bin/python /usr/local/bin/python3 && \
+    ln -sf /opt/hermes/.venv/bin/python /usr/local/bin/python && \
+    ln -sf /usr/local/bin/node /usr/bin/node
+
+# The old template ran as root; this image runs as hermes (uid 10000) and
+# stage2-hook.sh only chowns a fixed list of HERMES_HOME subdirs. Legacy
+# cont-init.d scripts run as root after the stage2 hook and before s6-rc starts
+# services, which is exactly the window for fixing ownership and kicking sidecars.
+COPY --chmod=755 legacy/00-legacy-chown /etc/cont-init.d/00-legacy-chown
+COPY --chmod=755 legacy/99-legacy-kick-watchdogs /etc/cont-init.d/99-legacy-kick-watchdogs
+
+CMD ["sh", "-c", "rm -f \"$HERMES_HOME\"/gateway.pid \"$HERMES_HOME\"/gateway.lock \"$HERMES_HOME\"/gateway.sock; exec hermes gateway"]
