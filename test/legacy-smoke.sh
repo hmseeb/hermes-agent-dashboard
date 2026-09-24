@@ -16,6 +16,17 @@ cat > "$VOL/.hermes/scripts/ensure-nix-webui-tunnel.sh" <<'EOF'
 echo "kicked as $(id -un) HOME=$HOME python3=$(command -v python3) node=$(command -v node)" > /data/.hermes/kick-proof
 EOF
 echo "secret=1" > "$VOL/.config/gws/creds.json"
+# The kick script discovers watchdogs from cron/jobs.json (enabled, no_agent,
+# script name matching ensure|watchdog|tunnel|mux|proxy), like a real volume.
+mkdir -p "$VOL/.hermes/cron"
+cat > "$VOL/.hermes/cron/jobs.json" <<'EOF2'
+{"jobs": [
+  {"id": "kick0001", "name": "tunnel watchdog", "script": "ensure-nix-webui-tunnel.sh", "no_agent": true, "enabled": true, "schedule": {"kind": "interval", "minutes": 60}},
+  {"id": "kick0002", "name": "disabled watchdog", "script": "ensure-should-not-run.sh", "no_agent": true, "enabled": false, "schedule": {"kind": "interval", "minutes": 60}},
+  {"id": "kick0003", "name": "agent job", "script": "ensure-agent-job.sh", "no_agent": false, "enabled": true, "schedule": {"kind": "interval", "minutes": 60}}
+]}
+EOF2
+for s in ensure-should-not-run.sh ensure-agent-job.sh; do echo 'touch /data/.hermes/kick-wrong' > "$VOL/.hermes/scripts/$s"; done
 
 docker run -d --name "$NAME" --platform linux/amd64 \
   -e HERMES_DASHBOARD_BASIC_AUTH_USERNAME=admin \
@@ -34,9 +45,16 @@ for _ in $(seq 1 60); do curl -fs -o /dev/null http://127.0.0.1:19119/login && b
 check "dashboard /login answers 200"              'curl -fs -o /dev/null http://127.0.0.1:19119/login'
 check "/ redirects to /login (auth gate on)"      '[ "$(curl -s -o /dev/null -w %{http_code} http://127.0.0.1:19119/)" = 302 ]'
 check "/opt/data is a symlink to /data"           '[ "$(docker exec "$NAME" readlink /opt/data)" = /data ]'
-# pgrep -f would also match s6's rc.init/main-wrapper shell; target the python process.
-GW='pgrep -f "^/opt/hermes/.venv/bin/python3 /opt/hermes/.venv/bin/hermes gateway" | head -1'
-check "HERMES_HOME=/data/.hermes in gateway env"  "docker exec \"$NAME\" sh -c 'tr \"\\0\" \"\\n\" < /proc/\$($GW)/environ | grep -qx HERMES_HOME=/data/.hermes'"
+# pgrep -f would also match s6's rc.init/main-wrapper shell, and the exact argv
+# shape changes between releases (v2026.9.21 repeats python3); match the
+# venv entry point, which the wrapper shells never contain.
+GW='pgrep -f "venv/bin/hermes gateway run" | head -1'
+# Prove HERMES_HOME by effect: the gateway writes its state file into HERMES_HOME.
+# (Reading /proc/<pid>/environ stopped working in v2026.9.21 - the process is
+# not dumpable, so even root in docker exec gets EACCES.) /opt/data -> /data, so
+# a gateway on the image default HERMES_HOME would write /data/gateway_state.json.
+for _ in $(seq 1 20); do docker exec "$NAME" test -s /data/.hermes/gateway_state.json 2>/dev/null && break; sleep 3; done
+check "gateway state lands in /data/.hermes"      'docker exec "$NAME" test -s /data/.hermes/gateway_state.json && ! docker exec "$NAME" test -e /data/gateway_state.json'
 check "gateway runs as hermes, not root"          "[ \"\$(docker exec \"$NAME\" sh -c 'stat -c %U /proc/\$($GW)')\" = hermes ]"
 check "/data chowned to hermes (outside HERMES_HOME too)" '[ "$(docker exec "$NAME" stat -c %U /data/.config/gws/creds.json)" = hermes ]'
 check "/usr/local/bin/python3 is the 3.13 venv"   'docker exec "$NAME" /usr/local/bin/python3 -c "import sys,hermes_cli; assert sys.version_info[:2]==(3,13)"'
@@ -45,6 +63,7 @@ check "HOME-relative state visible via /opt/data" 'docker exec "$NAME" test -f /
 for _ in $(seq 1 25); do docker exec "$NAME" test -f /data/.hermes/kick-proof 2>/dev/null && break; sleep 3; done
 check "watchdog kicked at boot, as hermes"        'docker exec "$NAME" grep -q "kicked as hermes HOME=/data" /data/.hermes/kick-proof'
 check "watchdog saw venv python3 on PATH"         'docker exec "$NAME" grep -q "python3=/opt/hermes/.venv/bin/python3" /data/.hermes/kick-proof'
+check "kick skipped disabled and agent jobs"     '! docker exec "$NAME" test -e /data/.hermes/kick-wrong'
 check "IPv4-mapped connect to the v6 listener"    'docker exec "$NAME" /opt/hermes/.venv/bin/python -c "import socket; s=socket.create_connection((\"127.0.0.1\",9119),3); s.close()"'
 
 docker exec "$NAME" cat /data/.hermes/kick-proof 2>/dev/null || true
