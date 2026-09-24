@@ -3,7 +3,7 @@
 #
 # Pin a release tag rather than `latest` so a redeploy cannot silently jump
 # versions. Override with the HERMES_IMAGE_VERSION build arg / Railway variable.
-ARG HERMES_IMAGE_VERSION=v2026.9.21
+ARG HERMES_IMAGE_VERSION=v2026.9.24
 FROM nousresearch/hermes-agent:${HERMES_IMAGE_VERSION}
 
 # The image already supervises the dashboard as an s6 service
