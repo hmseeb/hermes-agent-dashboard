@@ -57,7 +57,10 @@ for _ in $(seq 1 20); do docker exec "$NAME" test -s /data/.hermes/gateway_state
 check "gateway state lands in /data/.hermes"      'docker exec "$NAME" test -s /data/.hermes/gateway_state.json && ! docker exec "$NAME" test -e /data/gateway_state.json'
 check "gateway runs as hermes, not root"          "[ \"\$(docker exec \"$NAME\" sh -c 'stat -c %U /proc/\$($GW)')\" = hermes ]"
 check "/data chowned to hermes (outside HERMES_HOME too)" '[ "$(docker exec "$NAME" stat -c %U /data/.config/gws/creds.json)" = hermes ]'
-check "/usr/local/bin/python3 is the 3.13 venv"   'docker exec "$NAME" /usr/local/bin/python3 -c "import sys,hermes_cli; assert sys.version_info[:2]==(3,13)"'
+# Run from /tmp: the image WORKDIR is /opt/hermes, where hermes_cli imports from
+# the cwd even without the venv, which is how a broken symlink once passed this.
+check "/usr/local/bin/python3 is the 3.13 venv"   'docker exec -w /tmp "$NAME" /usr/local/bin/python3 -c "import sys, yaml, hermes_cli; assert sys.version_info[:2]==(3,13) and sys.prefix != sys.base_prefix"'
+check "webui import check passes (yaml + AIAgent)" 'docker exec -w /tmp "$NAME" sh -c "PYTHONPATH=\$HERMES_WEBUI_AGENT_DIR \$HERMES_WEBUI_PYTHON -c \"import yaml; from run_agent import AIAgent\""'
 check "/usr/bin/node exists"                      'docker exec "$NAME" /usr/bin/node --version'
 check "HOME-relative state visible via /opt/data" 'docker exec "$NAME" test -f /opt/data/.config/gws/creds.json'
 for _ in $(seq 1 25); do docker exec "$NAME" test -f /data/.hermes/kick-proof 2>/dev/null && break; sleep 3; done

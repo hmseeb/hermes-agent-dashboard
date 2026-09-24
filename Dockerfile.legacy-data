@@ -41,9 +41,19 @@ ENV HERMES_HOME=/data/.hermes \
     HERMES_LAZY_INSTALL_TARGET=/data/.hermes/lazy-packages
 
 # Interpreter paths the old image had and scripts on those volumes hardcode.
-RUN ln -sf /opt/hermes/.venv/bin/python /usr/local/bin/python3 && \
-    ln -sf /opt/hermes/.venv/bin/python /usr/local/bin/python && \
+# Wrappers, not symlinks: Python finds its venv via pyvenv.cfg next to the path
+# it was INVOKED by, so a symlink at /usr/local/bin runs bare Python with no
+# venv site-packages (no yaml, no hermes). Verified live: the self-hosted webui
+# failed its import check this way and never came up.
+RUN printf '#!/bin/sh\nexec /opt/hermes/.venv/bin/python "$@"\n' > /usr/local/bin/python3 && \
+    chmod 755 /usr/local/bin/python3 && cp /usr/local/bin/python3 /usr/local/bin/python && \
     ln -sf /usr/local/bin/node /usr/bin/node
+
+# The self-hosted hermes-webui on these volumes resolves Hermes via these two
+# variables. Old-template volumes pin /opt/hermes-agent (gone) or rely on a
+# probe that fails here; point it at the real install. A repo .env still wins.
+ENV HERMES_WEBUI_AGENT_DIR=/opt/hermes \
+    HERMES_WEBUI_PYTHON=/opt/hermes/.venv/bin/python
 
 # The old template ran as root; this image runs as hermes (uid 10000) and
 # stage2-hook.sh only chowns a fixed list of HERMES_HOME subdirs. Legacy
