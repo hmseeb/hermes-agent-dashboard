@@ -2,7 +2,7 @@
 # era templates: their volume mounts at /data, HOME was /data, HERMES_HOME was
 # /data/.hermes, and everything on it is root-owned. Select on the service with
 # RAILWAY_DOCKERFILE_PATH=Dockerfile.legacy-data. Fresh deploys use ./Dockerfile.
-ARG HERMES_IMAGE_VERSION=v2026.9.14
+ARG HERMES_IMAGE_VERSION=v2026.9.21
 FROM nousresearch/hermes-agent:${HERMES_IMAGE_VERSION}
 
 # 9119 (upstream's default), not 8080: the old template ran its dashboard on
