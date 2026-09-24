@@ -48,10 +48,17 @@ jobs:
           branch="bump/hermes-$LATEST"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -b "$branch"
-          sed -i "s|ARG HERMES_IMAGE_VERSION=.*|ARG HERMES_IMAGE_VERSION=$LATEST|" Dockerfile
+          git checkout -B "$branch"
+          # Both images: Dockerfile (fresh template deploys) and Dockerfile.legacy-data
+          # (services migrated off /data-layout templates) must move together.
+          sed -i "s|ARG HERMES_IMAGE_VERSION=.*|ARG HERMES_IMAGE_VERSION=$LATEST|" Dockerfile Dockerfile.legacy-data
           git commit -qam "Bump Hermes image pin to $LATEST"
-          git push -q origin "$branch"
+          # Idempotent: a previous run may have pushed the branch and then failed
+          # to open the PR. Rebuild the branch from main and reuse any open PR.
+          git push -q --force origin "$branch"
+          if gh pr list --head "$branch" --state open --json number -q '.[0].number' | grep -q .; then
+            echo "PR for $branch already open"; exit 0
+          fi
           gh pr create --title "Bump Hermes image pin to $LATEST" --body "\
           Upstream published \`$LATEST\` (was \`$CURRENT\`).
 
