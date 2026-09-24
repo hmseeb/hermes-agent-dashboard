@@ -39,6 +39,14 @@ RUN set -eu; sc="$(/opt/hermes/.venv/bin/python -c 'import sitecustomize;print(s
     'socket.socket.setsockopt = setsockopt' \
     >> "$sc"; /opt/hermes/.venv/bin/python -c 'import socket,sys; sys.exit(0 if socket.socket.setsockopt.__class__.__name__ == "function" else 1)'
 
+# Upstream bug (v2026.9.14, still in v2026.9.21): plugins/platforms/photon/
+# sidecar_paths.py judges the image's own baked node_modules stale (the COPY'd
+# package-lock.json is newer than npm ci's install marker) and mirrors the
+# sidecar into $HERMES_HOME without send-format.mjs / stream-staleness.mjs, so
+# the Photon sidecar dies on ERR_MODULE_NOT_FOUND. The baked tree is complete;
+# run it in place. Drop once upstream mirrors every .mjs.
+ENV PHOTON_SIDECAR_DIR=/opt/hermes/plugins/platforms/photon/sidecar
+
 # The container's CMD runs as /init's main program, so the container lives and
 # dies with the gateway (Railway then restarts it), while s6 supervises the
 # dashboard beside it. `sh -c` is routed by main-wrapper.sh's "first arg is an

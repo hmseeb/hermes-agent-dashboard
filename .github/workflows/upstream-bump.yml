@@ -1,9 +1,13 @@
 name: Bump Hermes image pin
 
-# Watches Docker Hub for a newer nousresearch/hermes-agent release tag and opens
-# a PR bumping the Dockerfile pin. It never pushes to main: a Hermes release can
-# change config schema or dependency floors, and deployers redeploy from this
-# repo, so the bump stays a reviewed change.
+# Watches Docker Hub for a newer nousresearch/hermes-agent release tag, bumps
+# both Dockerfile pins on a branch, builds both images and runs the contract and
+# legacy smoke tests against them, and MERGES only if both pass. Merging to main
+# redeploys every service with a Railway deploy trigger on this repo. A failing
+# test leaves the PR open for a human; nothing broken reaches main.
+#
+# The tests run inside this job on purpose: a PR opened with GITHUB_TOKEN does
+# not trigger other workflows, so a separate pull_request check would never run.
 on:
   schedule:
     - cron: "17 6 * * *"
@@ -57,15 +61,34 @@ jobs:
           # to open the PR. Rebuild the branch from main and reuse any open PR.
           git push -q --force origin "$branch"
           if gh pr list --head "$branch" --state open --json number -q '.[0].number' | grep -q .; then
-            echo "PR for $branch already open"; exit 0
-          fi
+            echo "PR for $branch already open"
+          else
           gh pr create --title "Bump Hermes image pin to $LATEST" --body "\
           Upstream published \`$LATEST\` (was \`$CURRENT\`).
 
-          Before merging, run \`bash test/contract.sh\` against a local build of this
-          branch. It catches the failures a release can introduce: the dashboard not
+          This job builds both images and runs test/contract.sh and test/legacy-smoke.sh;
+          it merges only if both pass. They catch the failures a release can introduce: the dashboard not
           answering, the auth gate changing shape, the listener going IPv6-only, the
           gateway dying on a stale lock.
 
           Deployers redeploy from this repo, so a merge reaches other people's agents." \
             --base main --head "$branch"
+          fi
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+        id: pr
+      - name: Build both images
+        if: steps.pr.outputs.branch != ''
+        run: |
+          docker build -q -t hermes-agent-dashboard:test .
+          docker build -q -f Dockerfile.legacy-data -t hermes-legacy:test .
+      - name: Contract test (fresh template image)
+        if: steps.pr.outputs.branch != ''
+        run: IMAGE=hermes-agent-dashboard:test bash test/contract.sh
+      - name: Smoke test (migrated legacy-data image)
+        if: steps.pr.outputs.branch != ''
+        run: bash test/legacy-smoke.sh hermes-legacy:test
+      - name: Merge
+        if: steps.pr.outputs.branch != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr merge "${{ steps.pr.outputs.branch }}" --squash --delete-branch
