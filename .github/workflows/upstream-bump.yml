@@ -27,15 +27,18 @@ jobs:
         id: latest
         run: |
           set -euo pipefail
-          # Release tags only: vYYYY.M.D with an optional .PATCH. Skips latest/main,
-          # which are mutable and are exactly what the pin exists to avoid.
+          # Release tags only: semver vX.Y.Z (upstream's scheme since Oct 2026; the
+          # old vYYYY.M.D tags are excluded by major < 1000). Skips latest/stable,
+          # -desktop and rc.* tags, which are mutable or not the server image.
           latest=$(curl -fsSL "https://hub.docker.com/v2/repositories/nousresearch/hermes-agent/tags?page_size=100&ordering=last_updated" \
             | python3 -c "
           import json,re,sys
           tags=[t['name'] for t in json.load(sys.stdin)['results']]
-          rel=[t for t in tags if re.fullmatch(r'v\d{4}\.\d{1,2}\.\d{1,2}(\.\d+)?', t)]
+          rel=[t for t in tags if re.fullmatch(r'v\d{1,3}\.\d+\.\d+', t)]
           key=lambda t: [int(x) for x in t[1:].split('.')]
           print(max(rel, key=key) if rel else '')")
+          # Fail loudly: an empty result means upstream changed its tag scheme again.
+          if [ -z "$latest" ]; then echo "::error::No release tag matched on Docker Hub"; exit 1; fi
           current=$(grep -oE 'ARG HERMES_IMAGE_VERSION=\S+' Dockerfile | cut -d= -f2)
           echo "latest=$latest"   >> "$GITHUB_OUTPUT"
           echo "current=$current" >> "$GITHUB_OUTPUT"
