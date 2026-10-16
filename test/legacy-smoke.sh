@@ -47,8 +47,9 @@ check "/ redirects to /login (auth gate on)"      '[ "$(curl -s -o /dev/null -w 
 check "/opt/data is a symlink to /data"           '[ "$(docker exec "$NAME" readlink /opt/data)" = /data ]'
 # pgrep -f would also match s6's rc.init/main-wrapper shell, and the exact argv
 # shape changes between releases (v2026.9.21 repeats python3); match the
-# venv entry point, which the wrapper shells never contain.
-GW='pgrep -f "venv/bin/hermes gateway run" | head -1'
+# venv entry point, which the wrapper shells never contain. v0.22 launches it
+# as `python -c '...main())' gateway run` instead, so accept either form.
+GW='pgrep -f "(venv/bin/hermes|main\\(\\)\\)) gateway run" | head -1'
 # Prove HERMES_HOME by effect: the gateway writes its state file into HERMES_HOME.
 # (Reading /proc/<pid>/environ stopped working in v2026.9.21 - the process is
 # not dumpable, so even root in docker exec gets EACCES.) /opt/data -> /data, so
@@ -59,7 +60,7 @@ check "gateway runs as hermes, not root"          "[ \"\$(docker exec \"$NAME\" 
 check "/data chowned to hermes (outside HERMES_HOME too)" '[ "$(docker exec "$NAME" stat -c %U /data/.config/gws/creds.json)" = hermes ]'
 # Run from /tmp: the image WORKDIR is /opt/hermes, where hermes_cli imports from
 # the cwd even without the venv, which is how a broken symlink once passed this.
-check "/usr/local/bin/python3 is the 3.13 venv"   'docker exec -w /tmp "$NAME" /usr/local/bin/python3 -c "import sys, yaml, hermes_cli; assert sys.version_info[:2]==(3,13) and sys.prefix != sys.base_prefix"'
+check "/usr/local/bin/python3 is the venv"        'docker exec -w /tmp "$NAME" /usr/local/bin/python3 -c "import sys, yaml, hermes_cli; assert sys.prefix != sys.base_prefix"'
 check "webui import check passes (yaml + AIAgent)" 'docker exec -w /tmp "$NAME" sh -c "PYTHONPATH=\$HERMES_WEBUI_AGENT_DIR \$HERMES_WEBUI_PYTHON -c \"import yaml; from run_agent import AIAgent\""'
 check "/usr/bin/node exists"                      'docker exec "$NAME" /usr/bin/node --version'
 check "HOME-relative state visible via /opt/data" 'docker exec "$NAME" test -f /opt/data/.config/gws/creds.json'

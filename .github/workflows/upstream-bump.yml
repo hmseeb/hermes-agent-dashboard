@@ -85,9 +85,11 @@ jobs:
           docker build -q -t hermes-agent-dashboard:test .
           docker build -q -f Dockerfile.legacy-data -t hermes-legacy:test .
       - name: Contract test (fresh template image)
+        timeout-minutes: 10
         if: steps.pr.outputs.branch != ''
         run: IMAGE=hermes-agent-dashboard:test bash test/contract.sh
       - name: Smoke test (migrated legacy-data image)
+        timeout-minutes: 10
         if: steps.pr.outputs.branch != ''
         run: bash test/legacy-smoke.sh hermes-legacy:test
       - name: Merge

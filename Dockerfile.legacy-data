@@ -45,9 +45,21 @@ ENV HERMES_HOME=/data/.hermes \
 # it was INVOKED by, so a symlink at /usr/local/bin runs bare Python with no
 # venv site-packages (no yaml, no hermes). Verified live: the self-hosted webui
 # failed its import check this way and never came up.
-RUN printf '#!/bin/sh\nexec /opt/hermes/.venv/bin/python "$@"\n' > /usr/local/bin/python3 && \
-    chmod 755 /usr/local/bin/python3 && cp /usr/local/bin/python3 /usr/local/bin/python && \
+# Since v0.22 the venv's python symlinks to /usr/local/bin/python3 (itself a
+# symlink to the bundled interpreter), so: repoint the venv at the real binary,
+# and rm before writing, or the redirect overwrites the interpreter and the
+# wrapper execs itself forever (boot hung in stage2's config migrate).
+RUN set -eu; real="$(readlink -f /opt/hermes/.venv/bin/python)"; \
+    ln -sf "$real" /opt/hermes/.venv/bin/python; \
+    sed -i "s|^home = .*|home = $(dirname "$real")|" /opt/hermes/.venv/pyvenv.cfg; \
+    rm -f /usr/local/bin/python3 /usr/local/bin/python; \
+    printf '#!/bin/sh\nexec /opt/hermes/.venv/bin/python "$@"\n' > /usr/local/bin/python3; \
+    chmod 755 /usr/local/bin/python3; cp /usr/local/bin/python3 /usr/local/bin/python; \
     ln -sf /usr/local/bin/node /usr/bin/node
+# v0.22 dropped PyYAML (moved to ruamel.yaml); the self-hosted webui on these
+# volumes still imports yaml from this venv.
+RUN /opt/hermes/.venv/bin/python -c 'import yaml' 2>/dev/null || \
+    /opt/hermes/tools/uv-*/uv pip install --python /opt/hermes/.venv/bin/python pyyaml
 
 # The self-hosted hermes-webui on these volumes resolves Hermes via these two
 # variables. Old-template volumes pin /opt/hermes-agent (gone) or rely on a
