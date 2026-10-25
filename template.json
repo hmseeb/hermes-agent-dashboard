@@ -4,9 +4,9 @@
   "workspaceId": "fc4796db-2c6c-4354-a564-d4a1d900af53",
   "upstream": {
     "repository": "https://github.com/NousResearch/hermes-agent",
-    "version": "v2026.9.14",
-    "image": "nousresearch/hermes-agent:v2026.9.14",
-    "$note": "Upstream publishes an official image on Docker Hub (revision 345cd2b = tag v2026.9.14), so nothing is built from source. The incumbent 2691-deploy template clones the repo and compiles the React dashboard at build time, which is a multi-minute build with a documented trail of pyproject pin traps (nemo-relay floors, uv exclude-newer, editable-install-only). None of that applies here."
+    "version": "v0.22.5",
+    "image": "nousresearch/hermes-agent:v0.22.5",
+    "$note": "Upstream publishes an official image on Docker Hub (pinned in Dockerfile via ARG HERMES_IMAGE_VERSION, bumped by .github/workflows/upstream-bump.yml after contract tests), so nothing is built from source. The incumbent 2691-deploy template clones the repo and compiles the React dashboard at build time, which is a multi-minute build with a documented trail of pyproject pin traps (nemo-relay floors, uv exclude-newer, editable-install-only). None of that applies here."
   },
   "positioning": {
     "$note": "Marketplace is SATURATED for 'hermes': hermes-railway-template 4813 deploys (thin worker, no web UI), hermes-agent-ai 2691 (fat custom Starlette admin over a source build), hermes-agent-nous-research 1065, hermes 201. The gap is the intersection: the official image's own supervised dashboard, exposed and authed, with no custom server code. Name follows the one latecomer pattern that beats incumbents (N8N (w/ workers)): app name first, one capability qualifier in parentheses."
