@@ -42,7 +42,7 @@ VARIABLES = {
     # comes up, and no default can supply them safely. Everything else either has
     # a working default or can be added from the dashboard after boot.
     "HERMES_DASHBOARD_BASIC_AUTH_USERNAME": {
-        "isOptional": False,
+        "isOptional": False, "defaultValue": "",
         "description": "Choose the username for the dashboard login page.",
     },
     # Deliberately no defaultValue: this becomes a required field on the deploy
@@ -50,8 +50,8 @@ VARIABLES = {
     # exists. A ${{secret(32)}} default deploys fine but leaves people hunting
     # through the Variables tab for a login they never saw.
     "HERMES_DASHBOARD_BASIC_AUTH_PASSWORD": {
-        "isOptional": False,
-        "description": "Choose the password for the dashboard login page. Clearing it later does not open the dashboard up, it stops the dashboard from starting.",
+        "isOptional": False, "defaultValue": "",
+        "description": "Choose the password for the dashboard login page. Use a long, unique value with no spaces at the start or end. Clearing it later does not open the dashboard up, it stops the dashboard from starting.",
     },
     "HERMES_DASHBOARD_BASIC_AUTH_SECRET": {
         "isOptional": False, "defaultValue": "${{secret(64)}}",
