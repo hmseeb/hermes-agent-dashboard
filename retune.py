@@ -14,9 +14,9 @@ import sys
 sys.path.insert(0, str(pathlib.Path("~/.claude/skills/create-template-for-railway/scripts").expanduser()))
 import rw  # noqa: E402
 
-TEMPLATE_ID = "4817ec8c-5b12-4b0f-a2d6-7daa2cb9a6d9"
+# Every published listing shares this config: (w/ Dashboard) 4817ec8c..., (Telegram) 9fbb263b...
+TEMPLATE_ID = sys.argv[1] if len(sys.argv) > 1 else "4817ec8c-5b12-4b0f-a2d6-7daa2cb9a6d9"
 WORKSPACE = "fc4796db-2c6c-4354-a564-d4a1d900af53"  # Auromations
-NAME = "Hermes Agent (w/ Dashboard)"
 
 # isOptional false with an EMPTY default is what renders as a field the
 # deployer must fill. Hermes accepts any non-empty value (verified on v0.23.1:
@@ -33,7 +33,7 @@ CREDENTIALS = {
 }
 
 template = rw.gql(
-    "query($id: String!){ template(id:$id){ serializedConfig canvasConfig } }", {"id": TEMPLATE_ID}
+    "query($id: String!){ template(id:$id){ name serializedConfig canvasConfig } }", {"id": TEMPLATE_ID}
 )["template"]
 config = template["serializedConfig"]
 for service in config["services"].values():
@@ -43,7 +43,7 @@ for service in config["services"].values():
 rw.gql(
     "mutation($id: String!, $input: TemplateUpsertConfigInput!) { templateUpsertConfig(id: $id, input: $input) { id } }",
     {"id": TEMPLATE_ID, "input": {
-        "name": NAME, "workspaceId": WORKSPACE,
+        "name": template["name"], "workspaceId": WORKSPACE,
         "serializedConfig": config, "canvasConfig": template["canvasConfig"],
     }},
     internal=True,

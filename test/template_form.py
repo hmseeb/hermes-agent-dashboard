@@ -13,7 +13,8 @@ import sys
 sys.path.insert(0, str(pathlib.Path("~/.claude/skills/create-template-for-railway/scripts").expanduser()))
 import rw  # noqa: E402
 
-TEMPLATE_ID = "4817ec8c-5b12-4b0f-a2d6-7daa2cb9a6d9"
+# Every published listing shares this config: (w/ Dashboard) 4817ec8c..., (Telegram) 9fbb263b...
+TEMPLATE_ID = sys.argv[1] if len(sys.argv) > 1 else "4817ec8c-5b12-4b0f-a2d6-7daa2cb9a6d9"
 WANT = {"HERMES_DASHBOARD_BASIC_AUTH_PASSWORD", "HERMES_DASHBOARD_BASIC_AUTH_USERNAME"}
 
 config = rw.gql(
