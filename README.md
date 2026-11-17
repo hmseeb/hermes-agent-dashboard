@@ -36,7 +36,7 @@ Every other Hermes variable is passed straight through from Railway. See the [up
 
 ## Upgrading
 
-Change the `HERMES_IMAGE_VERSION` build argument (default `v2026.9.14`) and redeploy. Do not run `hermes update` inside the container: the image is immutable, so the change disappears on the next deploy while your persisted config stays ahead of the code.
+The Dockerfile pins a release tag; `.github/workflows/upstream-bump.yml` moves it to upstream's newest stable release after the contract and legacy smoke tests pass. Redeploy from the latest commit, or set a `HERMES_IMAGE_VERSION` variable on the service to pick a tag. Do not run `hermes update` inside the container: the image is immutable, so the change disappears on the next deploy while your persisted config stays ahead of the code.
 
 ## Persistence
 
