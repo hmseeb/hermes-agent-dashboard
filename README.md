@@ -36,7 +36,7 @@ Every other Hermes variable is passed straight through from Railway. See the [up
 
 ## Upgrading
 
-Change the `HERMES_IMAGE_VERSION` build argument (default `v2026.9.14`) and redeploy. Do not run `hermes update` inside the container: the image is immutable, so the change disappears on the next deploy while your persisted config stays ahead of the code.
+Change the `HERMES_IMAGE_VERSION` build argument in the Dockerfile (pinned to the newest upstream release that passed `test/contract.sh`) and redeploy. Do not run `hermes update` inside the container: the image is immutable, so the change disappears on the next deploy while your persisted config stays ahead of the code.
 
 ## Persistence
 

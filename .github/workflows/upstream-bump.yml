@@ -59,6 +59,9 @@ jobs:
           # Both images: Dockerfile (fresh template deploys) and Dockerfile.legacy-data
           # (services migrated off /data-layout templates) must move together.
           sed -i "s|ARG HERMES_IMAGE_VERSION=.*|ARG HERMES_IMAGE_VERSION=$LATEST|" Dockerfile Dockerfile.legacy-data
+          # The build sheet records the pin too; test/version_pins.py fails if it drifts.
+          sed -i -E "s#(\"version\": \")v[0-9.]+#\1$LATEST#; s#(nousresearch/hermes-agent:)v[0-9.]+#\1$LATEST#" template.json
+          python3 test/version_pins.py
           git commit -qam "Bump Hermes image pin to $LATEST"
           # Idempotent: a previous run may have pushed the branch and then failed
           # to open the PR. Rebuild the branch from main and reuse any open PR.

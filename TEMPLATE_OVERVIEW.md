@@ -42,7 +42,7 @@ Variables you may want to change:
 - `TELEGRAM_BOT_TOKEN`: swap for `DISCORD_BOT_TOKEN`, `SLACK_BOT_TOKEN` plus `SLACK_APP_TOKEN`, or any other platform Hermes supports.
 - `HERMES_DASHBOARD_BASIC_AUTH_PASSWORD`: change it to your own value at any time. Clearing it does not make the dashboard public, it stops the dashboard from starting, because Hermes refuses to serve an unauthenticated public dashboard.
 
-To upgrade Hermes, change the `HERMES_IMAGE_VERSION` build argument in the repository's Dockerfile, currently pinned to `v2026.9.14`, and redeploy. Do not run `hermes update` inside the container: the image is immutable, so the upgrade disappears on the next deploy while your persisted config stays ahead of the code.
+The repository's Dockerfile pins a Hermes release tag and follows upstream's newest stable release: a daily job bumps the pin only after its tests pass. To upgrade, redeploy from the latest commit, or set a `HERMES_IMAGE_VERSION` variable on the service to the release tag you want. Do not run `hermes update` inside the container: the image is immutable, so the upgrade disappears on the next deploy while your persisted config stays ahead of the code.
 
 Troubleshooting:
 
