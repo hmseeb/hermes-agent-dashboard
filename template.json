@@ -4,8 +4,8 @@
   "workspaceId": "fc4796db-2c6c-4354-a564-d4a1d900af53",
   "upstream": {
     "repository": "https://github.com/NousResearch/hermes-agent",
-    "version": "v0.23.4",
-    "image": "nousresearch/hermes-agent:v0.23.4",
+    "version": "v0.23.5",
+    "image": "nousresearch/hermes-agent:v0.23.5",
     "$note": "Upstream publishes an official image on Docker Hub (pinned in Dockerfile via ARG HERMES_IMAGE_VERSION, bumped by .github/workflows/upstream-bump.yml after contract tests), so nothing is built from source. The incumbent 2691-deploy template clones the repo and compiles the React dashboard at build time, which is a multi-minute build with a documented trail of pyproject pin traps (nemo-relay floors, uv exclude-newer, editable-install-only). None of that applies here."
   },
   "positioning": {
@@ -50,7 +50,7 @@
     "journey": "Deploy -> open domain -> browser basic-auth prompt -> log in as admin -> Hermes dashboard loads (Chat, Keys, Skills) -> message the Telegram bot -> approve the pairing request -> agent replies",
     "contractTests": "test/contract.sh: 401 anonymous, 200 authenticated, 401 on wrong password, v4-mapped connect to the v6 listener, gateway process alive, stale gateway.pid cleared across a container restart",
     "v0_23_4": [
-      "2026-11-26: stranger deploys of both published listings (hermes-agent-w-dashboard, hermes-agent-telegram) built main b6d7b04 FROM nousresearch/hermes-agent:v0.23.4 and reached SUCCESS.",
+      "2026-11-26: stranger deploys of both published listings (hermes-agent-w-dashboard, hermes-agent-telegram) built main b6d7b04 FROM nousresearch/hermes-agent:v0.23.5 and reached SUCCESS.",
       "Dashboard journey on each: / 302 to /login, /login 200, wrong password 401, chosen password 200, authed / 200, /api/status version 0.23.4 with the gateway running.",
       "Real agent turn on each: ANTHROPIC_API_KEY set on the scratch service only, main model set to anthropic/claude-haiku-4-5-20251001 via /api/model/set, a dashboard cron job ran the terminal tool (uname -sm) and replied 'REAL_TURN_OK Linux x86_64'.",
       "Not verified: a Telegram message round trip, since no bot token was available. /api/messaging/platforms lists the Telegram adapter as disabled, with TELEGRAM_BOT_TOKEN required and unset, which is the expected state before a token is added."
